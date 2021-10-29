@@ -1,4 +1,4 @@
-// Contributors: Sebastian Almeida, Alex
+// Contributors: Sebastian Almeida, Alex, Estefania Sanchez
 // COP 4600 Homework 2
 // 10/27/2021
 
@@ -88,6 +88,65 @@ char **tokenize(char *line)
   return tokens;
 }
 
+// moves directory || Estefania Sanchez
+void moveToDir(char *directory)
+{
+  /* The code here in the comments will change directories but only once
+     I promise I tried my best.
+  // check for directory
+  if (parsedInput[1] == NULL)
+  {
+    printf("**Error: no directory stated.\n**Correct input format: # movetodir <directory>\n");
+  }
+  else if (currentDir == NULL)
+  {
+    printf("**Error: unable to open directory.\n");
+  }
+  else
+  {
+    //if ((temp = opendir(parsedInput[1])) != NULL)
+    if ((filepath = realpath(parsedInput[1], NULL)) != NULL)
+    {
+      // close current directories
+      //closedir(temp);
+      closedir(currentDir);
+      // update filepath and current directory
+      //filepath = realpath(parsedInput[1], NULL);
+      currentDir = opendir(filepath);
+      printf("Moved to directory: %s\n", parsedInput[1]);
+    }
+    else
+    {
+      printf("**Error: directory not found.\n");
+    }
+  }
+  */
+  char currdir[PATH_MAX];
+  if (directory == NULL)
+  {
+    printf("**Error: no directory stated.\n**Correct input format: # movetodir <directory>\n");
+  }
+  else
+  {
+    strcpy(currdir,realpath(directory, NULL));
+    if (chdir(directory) != 0)
+    {
+      printf("**Error: directory not found.\n");
+      return;
+    }
+    printf("Moved to directory: %s\n", directory);
+  }
+}
+
+// gets current directory || Estefania Sanchez
+void whereAmI()
+{
+  char *filepath;
+  char currdir[PATH_MAX];
+  filepath = getcwd(currdir, sizeof(currdir));
+  printf("Current Directory: %s\n", filepath);
+}
+
 
 int main()
 {
@@ -95,8 +154,13 @@ int main()
   char *rawInput;
   char **parsedInput;
   char ***history;
+
+
   int *argc;
   int byebye = 0;
+
+
+
   // Loop For Printing Prompt And Then Reading User Input
   while(byebye == 0)
   {
@@ -140,13 +204,15 @@ int main()
     else if (strcmp(parsedInput[0], "dalek") == 0)
     {
     }
-    // Movetodir Command
+    // Movetodir Command: Estefania Sanchez
     else if (strcmp(parsedInput[0], "movetodir") == 0)
     {
+        moveToDir(parsedInput[1]);
     }
-    // Whereami Command
+    // Whereami Command: Estefania Sanchez
     else if (strcmp(parsedInput[0], "whereami") == 0)
     {
+        whereAmI();
     }
     // Unrecognized Command
     else
