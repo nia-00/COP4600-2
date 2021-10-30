@@ -1,17 +1,86 @@
-// Contributors: Sebastian Almeida, Alex
+// Contributors: Sebastian Almeida, Alex, Ryan, Nia
 // COP 4600 Homework 2
 // 10/27/2021
 
+#define _POSIX_SOURCE
+#define PATH_MAX 32768
+#include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <string.h>
+#include <ctype.h>
+#include <sys/wait.h>
+
+// PID Linked List
+typedef struct node {
+    pid_t pid;
+    struct node* next;
+} pid_list;
 
 // Function Prototypes
 char* readInput();
 char** tokenize();
 char*** addToHistory();
 
+int numTokens = 0;
+void moveToDir(char *directory)
+{
+  /* The code here in the comments will change directories but only once
+     I promise I tried my best.
+  // check for directory
+  if (parsedInput[1] == NULL)
+  {
+    printf("**Error: no directory stated.\n**Correct input format: # movetodir <directory>\n");
+  }
+  else if (currentDir == NULL)
+  {
+    printf("**Error: unable to open directory.\n");
+  }
+  else
+  {
+    //if ((temp = opendir(parsedInput[1])) != NULL)
+    if ((filepath = realpath(parsedInput[1], NULL)) != NULL)
+    {
+      // close current directories
+      //closedir(temp);
+      closedir(currentDir);
+      // update filepath and current directory
+      //filepath = realpath(parsedInput[1], NULL);
+      currentDir = opendir(filepath);
+      printf("Moved to directory: %s\n", parsedInput[1]);
+    }
+    else
+    {
+      printf("**Error: directory not found.\n");
+    }
+  }
+  */
+  char currdir[PATH_MAX];
+  if (directory == NULL)
+  {
+    printf("**Error: no directory stated.\n**Correct input format: # movetodir <directory>\n");
+  }
+  else
+  {
+    strcpy(currdir,realpath(directory, NULL));
+    if (chdir(directory) != 0)
+    {
+      printf("**Error: directory not found.\n");
+      return;
+    }
+    printf("Moved to directory: %s\n", directory);
+  }
+}
+// gets current directory || Estefania Sanchez
+void whereAmI()
+{
+  char *filepath;
+  char currdir[PATH_MAX];
+  filepath = getcwd(currdir, sizeof(currdir));
+  printf("Current Directory: %s\n", filepath);
+}
 // Function To Read Users Input As A Raw String
 char *readInput(void)
 {
@@ -94,18 +163,36 @@ int main()
   // Initialize Variables
   char *rawInput;
   char **parsedInput;
-  char ***history;
-  int *argc;
+  pid_list* pidList = NULL;
+  int bufsize = 1024;
+  int replay = 0;
+  int replayIndex;
+  char **history = malloc(bufsize * sizeof(char*));
+  int i;
   int byebye = 0;
+  int commandCounter = 0;
   // Loop For Printing Prompt And Then Reading User Input
   while(byebye == 0)
   {
-    // Print Prompt
-    printf("# ");
-    // Read In User Input
-    rawInput = readInput();
-    // Parse User Input
-    parsedInput = tokenize(rawInput);
+    // Check If We Are Replaying
+    if (replay == 1)
+    {
+      replay = 0;
+      rawInput = history[replayIndex];
+      parsedInput = tokenize(history[replayIndex]);
+      printf("%s\n", history[replayIndex]);
+      history[commandCounter] = history[replayIndex];
+      printf("%s\n", history[commandCounter]);
+    }
+    else
+    {
+      // Print Prompt
+      printf("# ");
+      // Read In User Input
+      rawInput = readInput();
+      // Parse User Input
+      parsedInput = tokenize(rawInput);
+    }
     // Ensure That A Command Was Passed
     if (parsedInput[0] == NULL)
     {
@@ -113,40 +200,156 @@ int main()
       free(parsedInput);
       continue;
     }
+    else
+    {
+      history[commandCounter] = rawInput;
+      commandCounter += 1;
+    }
     // If-Else Command Statemnt
     // ByeBye Command
     if (strcmp(parsedInput[0], "byebye") == 0)
     {
       byebye = 1;
-      break;
     }
     // History Command
     else if (strcmp(parsedInput[0], "history") == 0)
     {
+      // Print History
+      if (parsedInput[1] == NULL)
+      {
+        for (i = commandCounter - 1; i >= 0; i--)
+        {
+          printf("%d: %s\n", (commandCounter - i - 1), history[i]);
+        }
+      }
+      // Clear History
+      else if ((strcmp(parsedInput[1], "-c") == 0))
+      {
+        for (i = 0; i < commandCounter; i++)
+        {
+          free(history[i]);
+          commandCounter = 0;
+        }
+      }
+      // Unrecognized Command
+      else
+      {
+        printf("Unrecognized Clear Flag\n");
+      }
     }
-    // Replay Command
+    // Replay Command This Will Not Show In History
     else if (strcmp(parsedInput[0], "replay") == 0)
     {
+      if (parsedInput[1] == NULL)
+      {
+        replay = 1;
+        commandCounter -= 1;
+        free(rawInput);
+        replayIndex = commandCounter - 1;
+      }
+      else if (atoi(parsedInput[1]) > commandCounter - 2)
+      {
+        printf("Please Provide A Command Number In Range For Replay\n");
+        commandCounter -= 1;
+        free(rawInput);
+      }
+      else
+      {
+        replay = 1;
+        commandCounter--;
+        free(rawInput);
+        replayIndex = commandCounter - atoi(parsedInput[1]) - 1;
+      }
     }
     // Start Command
     else if (strcmp(parsedInput[0], "start") == 0)
     {
+      pid_t process = fork();
+      if (process == -1){
+          printf("Error Forking");
+      } else if (process == 0) {
+          // Running on child process
+          // Exec takes a null terminated list of arguments
+          char** args = malloc(numTokens * sizeof(char*));
+          for (int i = 0; i < numTokens - 1; i++){
+              args[i] = parsedInput[i + 1];
+          }
+          args[numTokens - 1] = NULL;
+          int execError = execv(parsedInput[1], args);
+          if (execError == -1){
+              printf("Program doesn't exist\n");
+          }
+      } else {
+          // if on parent process, wait for child to finish executing
+          waitpid(process, NULL, 0);
+      }
     }
     // Background Command
     else if (strcmp(parsedInput[0], "background") == 0)
     {
+      pid_t process = fork();
+       if (process == -1){
+           printf("Error Forking");
+       } else if (process == 0) {
+           // Running on child process
+           // Exec takes a null terminated list of arguments
+           char** args = malloc(numTokens * sizeof(char*));
+           for (int i = 0; i < numTokens - 1; i++){
+               args[i] = parsedInput[i + 1];
+           }
+           args[numTokens - 1] = NULL;
+           int execError = execv(parsedInput[1], args);
+           if (execError == -1){
+               printf("Program doesn't exist\n");
+               continue;
+           }
+       } else {
+           // if on parent process, add PID to list
+           printf("PID: %d\n", process);
+           pid_list* new_node = malloc(sizeof(pid_list*));
+           new_node->pid = process;
+           new_node->next = NULL;
+           if(pidList == NULL){
+               pidList = new_node;
+           } else {
+               pid_list* temp_node = pidList;
+               while (temp_node->next != NULL){
+                   temp_node = temp_node->next;
+               }
+               temp_node->next = new_node;
+           }
+       }
     }
     // Dalek Command
     else if (strcmp(parsedInput[0], "dalek") == 0)
     {
+      if(parsedInput[1] == NULL){
+           printf("Please enter a PID to exterminate.");
+           continue;
+       }
+       else{
+           char* helper;
+           pid_t victim;
+
+           victim = strtol(parsedInput[1], &helper, 10);
+
+           if (kill(victim, SIGKILL) == 0){
+               printf("%d has been exterminated.", victim);
+           }
+           else if(kill(victim, SIGKILL) == 1){
+               printf("%d was too strong. Extermination failed.", victim);
+           }
+       }
     }
     // Movetodir Command
     else if (strcmp(parsedInput[0], "movetodir") == 0)
     {
+      moveToDir(parsedInput[1]);
     }
     // Whereami Command
     else if (strcmp(parsedInput[0], "whereami") == 0)
     {
+      whereAmI();
     }
     // Unrecognized Command
     else
@@ -154,8 +357,9 @@ int main()
       printf("Unrecognized Command\n");
     }
     // Free Input Arrays
-    free(rawInput);
+
     free(parsedInput);
   }
+  // Make Sure No Memory Leaks Also Print To File Here
   return 0;
 }
